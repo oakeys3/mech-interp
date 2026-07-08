@@ -1,0 +1,34 @@
+# Experiment configuration — single source of truth for model, benchmark,
+# generation, probing, and patching settings.
+#
+# STATUS: Phase 0 in progress. Fields marked PENDING are not locked until the
+# --n 25 confirmation run on Qwen2.5-1.5B-Instruct closes the decision gate.
+
+model:
+  primary: Qwen/Qwen2.5-1.5B-Instruct  # PENDING confirmation at n=25
+  fallback: null                        # to be determined only if the n=25 run fails
+
+benchmark:
+  suite: evalplus                       # confirmed post-spike (HumanEval alone has weak test coverage)
+  subsets: [humaneval, mbpp]
+
+generation:
+  temperature: 0.2
+  max_new_tokens: 512
+  correction_rounds: 3
+  n_per_problem: 25                     # PENDING confirmation run
+
+probing:
+  regularization: l1
+  C_sweep: [0.001, 0.01, 0.1, 1.0]
+  layers: all                           # probe every layer, then focus on signal layers
+  components: [residual_stream, attn_heads, mlp_out]
+
+patching:
+  target_failure_types: [F2, F1]        # F3/F4 are stretch goals
+  effect_metric: delta_pass_rate
+
+labels:
+  # Per-stage failure taxonomy. Every (problem, stage, attempt) tuple gets one label.
+  classes: [P, F1, F2, F3, F4]
+  min_examples_per_failure_class: 50

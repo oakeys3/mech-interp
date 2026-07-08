@@ -1,0 +1,19 @@
+# Core ML stack
+torch>=2.4
+transformers>=5.0
+datasets>=3.0
+transformer-lens>=2.0
+
+# Benchmarks
+evalplus>=0.3
+
+# Probing / analysis
+scikit-learn>=1.5
+numpy>=1.26
+pandas>=2.2
+matplotlib>=3.9
+
+# Infrastructure
+pyyaml>=6.0
+pytest>=8.0
+jupyter>=1.0

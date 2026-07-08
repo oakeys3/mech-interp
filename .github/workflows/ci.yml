@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Keep CI light: only what the tests actually import. The full ML stack
+      # (torch, transformer-lens) is installed locally, not in CI.
+      - name: Install test dependencies
+        run: pip install pytest pyyaml
+      - name: Run tests
+        run: pytest tests/ -v

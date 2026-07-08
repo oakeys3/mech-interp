@@ -216,3 +216,23 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Project-specific ---
+
+# Raw trajectory logs can get large; keep the directory, ignore contents.
+data/raw/*
+!data/raw/.gitkeep
+
+# Extracted activations are far too large for git.
+*.pt
+*.npz
+*.safetensors
+
+# HuggingFace model/dataset caches if downloaded locally
+.hf_cache/
+
+# Spike output transcripts
+spike/*.jsonl
+
+# Claude Code local settings
+.claude/
