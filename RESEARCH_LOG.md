@@ -110,3 +110,36 @@ Phase 1 (dataset collection) begins. First target: `data/collection/harness.py`
 with the self-test stripping fix ported from the spike, under unit test —
 stripping was re-confirmed necessary in the n=25 run (gen2 outputs appended
 `assert` blocks again).
+
+---
+
+## 2026-07-08 (later) — EvalPlus runner built; grading is POSIX-only
+
+`harness.py` now wraps EvalPlus grading (`load_problem_suite` + `grade`,
+mirroring `evalplus.evaluate.evaluate`'s own calls including dataset-hash
+groundtruth caching). `GradeResult.passed` requires BOTH base and plus suites —
+a base-only pass is precisely the spurious-pass label noise we switched to
+EvalPlus to remove.
+
+**`[OSS CANDIDATE]` — EvalPlus grading silently returns garbage on Windows.**
+`reliability_guard` unconditionally does `import resource` (Unix-only), so the
+grader child process crashes; `time_limit` additionally needs
+`signal.setitimer`/`SIGALRM` (also Unix-only). The parent misreports the crash
+as `timeout` for every solution — canonical solutions included — so a Windows
+user gets plausible-looking, uniformly failing results with no error. Fix
+options upstream: platform guard with a loud `NotImplementedError`, or Windows
+fallbacks (no clean `SIGALRM` equivalent exists, so the guard is the honest
+fix). This is the strongest contribution candidate so far.
+
+**Architecture decision:** grading runs on Linux only. Production collection
+runs on Colab (needed for GPU anyway, so generation and grading share one
+Linux session). Locally, grading works under WSL (validated: full test suite
+incl. the canonical-passes/broken-fails integration test, Ubuntu WSL2,
+Python 3.12, ~21 s). `grade()` raises immediately on Windows with a message
+pointing to WSL/Colab rather than returning fake timeouts.
+
+**Compute decision:** Colab free tier (T4) for collection. CPU rate measured
+at ~2.3 min/generation; collection needs ~1,500–2,000 generations → 60+ CPU
+hours vs. an evening on a T4. Hard design requirement discovered: Colab
+sessions disconnect after a few hours, so `collect.py` must write each
+trajectory to JSONL immediately and resume by skipping completed task_ids.

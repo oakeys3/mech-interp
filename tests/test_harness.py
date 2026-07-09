@@ -4,7 +4,18 @@ from pathlib import Path
 
 import yaml
 
-from data.collection.harness import extract_code_block, strip_self_tests
+import os
+
+import pytest
+
+from data.collection.harness import (
+    GradeResult,
+    extract_code_block,
+    grade,
+    load_problem_suite,
+    prepare_solution,
+    strip_self_tests,
+)
 
 CONFIG_PATH = Path(__file__).parent.parent / "configs" / "experiment_config.yaml"
 
@@ -137,8 +148,52 @@ def test_full_pipeline_on_observed_qwen_output() -> None:
         'assert separate_paren_groups("( )") == ["()"]\n'
         "```"
     )
-    code = strip_self_tests(extract_code_block(raw))
+    code = prepare_solution(raw)
     assert code.endswith("return stack")
     assert "assert" not in code
     assert "# Test" not in code
+    assert code == strip_self_tests(extract_code_block(raw))
+
+
+# --------------------------------------------------------------------------- #
+# Grading
+# --------------------------------------------------------------------------- #
+
+def test_grade_result_requires_both_suites() -> None:
+    """A base-only pass is a spurious pass, not a pass."""
+    assert GradeResult("pass", "pass").passed
+    assert not GradeResult("pass", "fail").passed
+    assert not GradeResult("fail", "pass").passed
+    assert not GradeResult("timeout", "timeout").passed
+
+
+def test_load_problem_suite_rejects_unknown_subset() -> None:
+    """Subset validation happens before any EvalPlus import."""
+    with pytest.raises(ValueError, match="unknown EvalPlus subset"):
+        load_problem_suite("apps")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-only guard")
+def test_grade_refuses_windows() -> None:
+    """On Windows, grading must fail loudly, never return bogus timeouts."""
+    with pytest.raises(RuntimeError, match="Windows"):
+        grade("humaneval", {}, {}, "def f(): pass")
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="EvalPlus sandbox is POSIX-only"
+)
+def test_grade_canonical_and_broken_solutions() -> None:
+    """Integration: the canonical solution passes, a broken one fails.
+
+    Skipped on Windows; requires evalplus (skipped if not installed, e.g. in
+    the lightweight CI environment).
+    """
+    pytest.importorskip("evalplus")
+    problems, expected = load_problem_suite("humaneval")
+    task = "HumanEval/0"
+    canonical = problems[task]["prompt"] + problems[task]["canonical_solution"]
+    broken = problems[task]["prompt"] + "    return False\n"
+    assert grade("humaneval", problems[task], expected[task], canonical).passed
+    assert not grade("humaneval", problems[task], expected[task], broken).passed
 
