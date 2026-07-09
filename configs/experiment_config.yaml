@@ -1,12 +1,12 @@
 # Experiment configuration — single source of truth for model, benchmark,
 # generation, probing, and patching settings.
 #
-# STATUS: Phase 0 in progress. Fields marked PENDING are not locked until the
-# --n 25 confirmation run on Qwen2.5-1.5B-Instruct closes the decision gate.
+# STATUS: locked 2026-07-08 at Phase 0 gate closure. Model and benchmark are
+# committed decisions — see RESEARCH_LOG.md 2026-07-08 for the evidence.
 
 model:
-  primary: Qwen/Qwen2.5-1.5B-Instruct  # PENDING confirmation at n=25
-  fallback: null                        # to be determined only if the n=25 run fails
+  primary: Qwen/Qwen2.5-1.5B-Instruct  # confirmed: 28% fail rate at n=25, legible F3 dynamics
+  fallback: null
 
 benchmark:
   suite: evalplus                       # confirmed post-spike (HumanEval alone has weak test coverage)
@@ -16,7 +16,7 @@ generation:
   temperature: 0.2
   max_new_tokens: 512
   correction_rounds: 3
-  n_per_problem: 25                     # PENDING confirmation run
+  n_per_problem: 25
 
 probing:
   regularization: l1

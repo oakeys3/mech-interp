@@ -1,12 +1,10 @@
-"""Unit tests for harness, labeling, and probe shapes.
-
-Currently covers the experiment config only; harness and labeling tests are
-added alongside their Phase 1 implementations.
-"""
+"""Unit tests for harness, labeling, and probe shapes."""
 
 from pathlib import Path
 
 import yaml
+
+from data.collection.harness import extract_code_block, strip_self_tests
 
 CONFIG_PATH = Path(__file__).parent.parent / "configs" / "experiment_config.yaml"
 
@@ -46,3 +44,101 @@ def test_generation_settings_are_sane() -> None:
     assert 0.0 <= gen["temperature"] <= 1.0
     assert gen["correction_rounds"] >= 1
     assert gen["max_new_tokens"] > 0
+
+
+# --------------------------------------------------------------------------- #
+# extract_code_block
+# --------------------------------------------------------------------------- #
+
+def test_extract_fenced_python_block() -> None:
+    """A ```python fence yields exactly its contents."""
+    text = "Here is the solution:\n```python\ndef f(x):\n    return x\n```\nDone."
+    assert extract_code_block(text) == "def f(x):\n    return x\n"
+
+
+def test_extract_fence_without_language_tag() -> None:
+    """A bare ``` fence works the same as a ```python fence."""
+    text = "```\ndef f(x):\n    return x\n```"
+    assert extract_code_block(text) == "def f(x):\n    return x\n"
+
+
+def test_extract_without_fence_returns_input() -> None:
+    """No fence means the text is passed through for downstream handling."""
+    text = "def f(x):\n    return x"
+    assert extract_code_block(text) == text
+
+
+def test_extract_takes_first_of_multiple_blocks() -> None:
+    """Documents current behavior: the FIRST block wins.
+
+    Correction responses could in principle quote old code first; if that is
+    observed in Phase 1 data, this choice must be revisited.
+    """
+    text = "```python\nfirst = 1\n```\ntext\n```python\nsecond = 2\n```"
+    assert extract_code_block(text) == "first = 1\n"
+
+
+# --------------------------------------------------------------------------- #
+# strip_self_tests
+# --------------------------------------------------------------------------- #
+
+def test_strip_trailing_asserts() -> None:
+    """Top-level asserts appended after the solution are removed."""
+    code = "def f(x):\n    return x\n\nassert f(1) == 1\nassert f(2) == 2\n"
+    assert strip_self_tests(code) == "def f(x):\n    return x"
+
+
+def test_strip_preserves_indented_assert() -> None:
+    """An assert inside a function body is legitimate code, not a self-test."""
+    code = "def f(x):\n    assert x > 0\n    return x"
+    assert strip_self_tests(code) == code
+
+
+def test_strip_test_comment_and_main_guard() -> None:
+    """`# Test cases` comments and `if __name__` guards both cut the code."""
+    code = "def f(x):\n    return x\n\n# Test cases\nprint(f(1))\n"
+    assert strip_self_tests(code) == "def f(x):\n    return x"
+    code = "def f(x):\n    return x\n\nif __name__ == '__main__':\n    f(1)\n"
+    assert strip_self_tests(code) == "def f(x):\n    return x"
+
+
+def test_strip_keeps_imports_and_helpers() -> None:
+    """Everything before the first marker survives, including helper defs."""
+    code = (
+        "from typing import List\n\n"
+        "def helper(x):\n    return x + 1\n\n"
+        "def f(xs: List[int]):\n    return [helper(x) for x in xs]\n\n"
+        "assert f([1]) == [2]\n"
+    )
+    expected = (
+        "from typing import List\n\n"
+        "def helper(x):\n    return x + 1\n\n"
+        "def f(xs: List[int]):\n    return [helper(x) for x in xs]"
+    )
+    assert strip_self_tests(code) == expected
+
+
+def test_strip_noop_when_clean() -> None:
+    """Code without self-tests is returned unchanged (modulo trailing ws)."""
+    code = "def f(x):\n    return x"
+    assert strip_self_tests(code) == code
+
+
+def test_full_pipeline_on_observed_qwen_output() -> None:
+    """Regression fixture shaped like Qwen's gen2 for HumanEval/1 (n=25 run):
+    fenced block with the solution followed by appended self-test asserts."""
+    raw = (
+        "```python\n"
+        "from typing import *\n\n"
+        "def separate_paren_groups(paren_string: str) -> List[str]:\n"
+        "    stack = []\n"
+        "    return stack\n\n"
+        "# Test cases\n"
+        'assert separate_paren_groups("( )") == ["()"]\n'
+        "```"
+    )
+    code = strip_self_tests(extract_code_block(raw))
+    assert code.endswith("return stack")
+    assert "assert" not in code
+    assert "# Test" not in code
+

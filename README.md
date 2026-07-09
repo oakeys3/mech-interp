@@ -26,9 +26,9 @@ Every trajectory is labeled **per stage** — each (problem, stage, attempt) tup
 
 ## Status
 
-**Phase 0 — model & benchmark confirmation (in progress).**
+**Phase 1 — dataset collection (in progress).** Phase 0 closed 2026-07-08: Qwen2.5-1.5B-Instruct confirmed as primary model (28% first-attempt failure rate at n=25, genuine traceback engagement in 6/7 correction attempts, 0/7 correction successes — see the research log), EvalPlus confirmed as benchmark.
 
-Findings so far, from the feasibility spike ([spike/spike.py](spike/spike.py)):
+Findings from the feasibility spike ([spike/spike.py](spike/spike.py)):
 
 - **Pythia-1.4B is eliminated.** Its self-correction mode echoes tracebacks as comments rather than generating corrected code — the failure mode is illegible for probing.
 - **Qwen2.5-1.5B-Instruct is the leading candidate**: 2/3 on first attempts with one genuine, traceable F2 → F3/F4 progression. Pending confirmation at n=25 (target: 30–60% failure rate across HumanEval problems).
