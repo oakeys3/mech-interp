@@ -129,7 +129,10 @@ as `timeout` for every solution — canonical solutions included — so a Window
 user gets plausible-looking, uniformly failing results with no error. Fix
 options upstream: platform guard with a loud `NotImplementedError`, or Windows
 fallbacks (no clean `SIGALRM` equivalent exists, so the guard is the honest
-fix). This is the strongest contribution candidate so far.
+fix). Second symptom, same cause: after the child crashes, the parent process
+never exits — the smoke-test script printed its (bogus) results and then hung
+for 26+ minutes until killed. This is the strongest contribution candidate so
+far.
 
 **Architecture decision:** grading runs on Linux only. Production collection
 runs on Colab (needed for GPU anyway, so generation and grading share one
