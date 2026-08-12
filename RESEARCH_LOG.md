@@ -146,3 +146,54 @@ at ~2.3 min/generation; collection needs ~1,500–2,000 generations → 60+ CPU
 hours vs. an evening on a T4. Hard design requirement discovered: Colab
 sessions disconnect after a few hours, so `collect.py` must write each
 trajectory to JSONL immediately and resume by skipping completed task_ids.
+
+---
+
+## 2026-07-09 — Collection loop built; EvalPlus gives no traceback
+
+`collect.py` and `data/SCHEMA.md` are in. 43 tests across both files, green on
+Windows and under WSL.
+
+**Schema decision — one record per attempt, append-only.** The labeling unit
+is `(problem, stage, attempt)` and each attempt is one probing example, so
+per-attempt lines are the natural grain; trajectories are recovered by
+grouping on `trajectory_id`. Append-only means a killed Colab session can at
+worst truncate the last line. A `final: true` flag on the last attempt is the
+resume marker: trajectories lacking one are incomplete and get re-run under a
+new id, and consumers drop them. No file rewriting, so no rewrite-crash class
+of bug at all.
+
+`prompt_messages` stores the exact message list sent to the model. Phase 2
+must replay these prompts to capture activations; storing them means
+`extract.py` cannot drift from what was actually run.
+
+**Finding — EvalPlus reports per-input flags, not tracebacks.** Probed
+directly (`untrusted_check` returns `(status, details)` where details is a
+list of 0/1 aligned with `base_input`/`plus_input`). Both a wrong-output
+solution and a crashing solution come back as `fail` with a flag list; the
+exception type is not surfaced. So correction feedback is reconstructed as
+"wrong result for input X, expected Y" rather than the traceback the spike fed
+the model.
+
+**Open risk (top item for next session):** the spike showed 0/7 corrections
+succeeding *with* tracebacks. Feedback quality directly drives F3 vs. recovery
+rates, and this feedback is strictly weaker for crashes — the model is not
+told it raised `ValueError`. Candidate fix: run the failing input in a
+subprocess to capture the real traceback, and pass both. Decide before the
+production run, since it changes what F3 measures.
+
+**F4 design.** The ordinary loop never revisits passing code, so F4 cannot
+occur in it. `collect.py` adds one `review` round after any trajectory that
+ends in a pass. The prompt deliberately tells the model it may return the
+solution unchanged — a prompt implying a bug exists would manufacture F4 and
+the label would describe the prompt, not the model.
+
+**Testability.** `run_trajectory` takes the generator and grading function as
+arguments instead of constructing them, so the whole loop is tested with stubs
+— no GPU, no model download, no POSIX-only sandbox. Torch lives in
+`data/collection/model.py` and is imported only by the real run.
+
+**Config ambiguity flagged:** `generation.n_per_problem: 25` reads as "samples
+per problem", which would be ~4100 trajectories against a 500–800 target; in
+the spike `--n` meant "number of problems". `collect.py` ignores the field and
+uses `--samples-per-problem` (default 1). Needs a decision before the run.

@@ -16,6 +16,11 @@ generation:
   temperature: 0.2
   max_new_tokens: 512
   correction_rounds: 3
+  # UNRESOLVED (2026-07-09): this field is ambiguous. In the spike, --n meant
+  # "number of problems"; read literally here it means "samples per problem",
+  # which at 25 x 164 problems would be ~4100 trajectories - far past the
+  # 500-800 target. collect.py ignores this field and takes
+  # --samples-per-problem (default 1) instead. Decide before the real run.
   n_per_problem: 25
 
 probing:

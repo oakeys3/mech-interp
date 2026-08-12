@@ -108,6 +108,10 @@ class GradeResult:
             HumanEval/MBPP test inputs.
         plus_status: Status on the EvalPlus-augmented inputs — the stricter
             suite that catches spurious passes.
+        base_details: Per-input 0/1 flags aligned with the problem's
+            ``base_input`` list, or None when EvalPlus reports none. This is
+            all EvalPlus gives us to explain a failure — there is no traceback.
+        plus_details: The same, aligned with ``plus_input``.
         passed: True only if BOTH suites pass. This is the label-relevant
             definition of success for the whole project: a base-only pass is
             exactly the label noise EvalPlus exists to remove.
@@ -115,6 +119,8 @@ class GradeResult:
 
     base_status: str
     plus_status: str
+    base_details: tuple[int, ...] | None = None
+    plus_details: tuple[int, ...] | None = None
 
     @property
     def passed(self) -> bool:
@@ -191,4 +197,24 @@ def grade(subset: str, problem: dict, expected_output: dict, solution: str) -> G
     return GradeResult(
         base_status=result["base"][0],
         plus_status=result["plus"][0],
+        base_details=_as_details(result["base"][1]),
+        plus_details=_as_details(result["plus"][1]),
     )
+
+
+def _as_details(details: object) -> tuple[int, ...] | None:
+    """Normalize EvalPlus's per-input flags into a plain tuple.
+
+    EvalPlus returns a list (or numpy array) of 0/1 flags, and its type has
+    changed across versions. Freezing it into a tuple of ints keeps
+    GradeResult hashable and JSON-friendly.
+
+    Args:
+        details: Whatever EvalPlus put in the second slot of its result tuple.
+
+    Returns:
+        A tuple of ints, or None if there were no per-input flags.
+    """
+    if details is None:
+        return None
+    return tuple(int(flag) for flag in details)
