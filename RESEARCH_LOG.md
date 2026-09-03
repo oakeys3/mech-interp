@@ -278,3 +278,57 @@ killing the run.
 not have caught this. The regression test now runs the two offending problems
 end-to-end through real grading. Sampling one easy problem is not coverage of a
 benchmark whose whole point is adversarial inputs.
+
+---
+
+## 2026-09-03 — Phase 1 dataset: HumanEval+ complete, F4 is empty
+
+First full collection finished: **164 trajectories, 509 labeled attempts** from
+HumanEval+. Volume clears the 500-attempt exit criterion from one subset alone.
+
+| Label | Count | Share | vs. >=50 bar |
+|-------|-------|-------|--------------|
+| P  | 170 | 33.4% | — |
+| F1 | 40  | 7.9%  | short by 10 |
+| F2 | 53  | 10.4% | OK |
+| F3 | 246 | 48.3% | OK |
+| F4 | 0   | 0.0%  | **empty** |
+
+**Self-correction works, barely.** 93 trajectories began in failure and 14
+recovered — a **15.1% correction success rate**. This closes the risk raised on
+2026-07-07, when the spike's single-round loop went 0/7: three rounds does
+produce a contrast class of successful corrections. Fourteen is thin, and any
+claim about *successful* correction will be underpowered.
+
+**F4 is rare, not blocked.** The review round ran 85 times. The model returned
+its code unchanged 69 times (81%), edited it 16 times, and broke it **zero**
+times. So the earlier hypothesis — that the "return it unchanged" wording
+suppressed F4 — is wrong: the model does edit passing code, it just does not
+damage it. By the rule of three, 0/16 bounds the spurious-break rate at roughly
+19% at 95% confidence, so this is weak evidence of rarity rather than proof of
+impossibility. Collecting 50 F4 examples would need on the order of 1,000+
+review attempts even at an optimistic 5% true rate.
+
+**Decision: cut F4.** It is first on the spec's scope-cut order, and the honest
+finding — that Qwen2.5-1.5B does not spuriously break its own working code at
+observable rates under a neutral review prompt — is a reportable result rather
+than a gap. The taxonomy becomes P/F1/F2/F3 for probing.
+
+**F3's 246 rows are not 246 independent examples.** 79 trajectories failed all
+three correction rounds, contributing 237 of the 246 F3 labels. Attempts within
+a trajectory share a problem, a prompt prefix, and often most of their code.
+Two consequences for Phase 2, both non-negotiable:
+
+1. **Train/test splits must be per trajectory, never per attempt.** Splitting
+   rows at random puts sibling attempts on both sides and inflates probe
+   accuracy through leakage.
+2. **Report balanced accuracy.** F3 is 48% of rows against F1's 8%; an
+   unweighted probe scores well by leaning on F3 alone.
+
+A `CORRECTION NOVELTY` section was added to `analysis/dataset_report.py` to
+measure how many correction attempts are verbatim re-emissions of the previous
+one — the spike showed Qwen doing exactly that on HumanEval/1, and each such
+row is a duplicate rather than an example.
+
+**Next:** MBPP+ collection (fixes F1's shortfall and adds ~378 independent
+trajectories), and Phase 2 probing on the HumanEval data in parallel.

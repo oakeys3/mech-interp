@@ -139,6 +139,51 @@ def review_behaviour(trajectories: list[list[dict[str, Any]]]) -> str:
     return "\n".join(lines)
 
 
+def repeated_attempts(trajectories: list[list[dict[str, Any]]]) -> str:
+    """Count attempts that re-emit the previous solution verbatim.
+
+    This decides how much of the F3 class is real. A trajectory that fails
+    three correction rounds contributes three F3 labels, but if the model
+    simply resubmitted the same code each time — behaviour already seen in the
+    spike on HumanEval/1 — those are duplicate rows, not independent examples,
+    and a probe trained on them is learning one example counted three times.
+
+    Args:
+        trajectories: Grouped, round-ordered trajectories.
+
+    Returns:
+        A printable section.
+    """
+    pairs = 0
+    identical = 0
+    for trajectory in trajectories:
+        for previous, attempt in zip(trajectory, trajectory[1:]):
+            if attempt["stage"] != "correction":
+                continue
+            pairs += 1
+            if attempt["solution"].strip() == previous["solution"].strip():
+                identical += 1
+    distinct_f3 = sum(
+        1
+        for trajectory in trajectories
+        for previous, attempt in zip(trajectory, trajectory[1:])
+        if attempt["stage"] == "correction"
+        and attempt["label"] == "F3"
+        and attempt["solution"].strip() != previous["solution"].strip()
+    )
+    lines = ["CORRECTION NOVELTY", ""]
+    lines.append(f"  correction attempts             : {pairs}")
+    lines.append(f"  identical to previous attempt   : {identical}")
+    if pairs:
+        lines.append(f"  re-emission rate                : {100 * identical / pairs:.1f}%")
+    lines.append(f"  F3 rows with genuinely new code : {distinct_f3}")
+    lines.append("")
+    lines.append("  Independent trajectories matter more than raw row counts:")
+    lines.append("  attempts within one trajectory are correlated, so train/test")
+    lines.append("  splits must be made per trajectory, never per attempt.")
+    return "\n".join(lines)
+
+
 def main() -> None:
     """Print a full report for a labeled trajectory file."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -156,6 +201,7 @@ def main() -> None:
         label_distribution(records),
         trajectory_shapes(trajectories),
         correction_effectiveness(trajectories),
+        repeated_attempts(trajectories),
         review_behaviour(trajectories),
     ):
         print(section)
