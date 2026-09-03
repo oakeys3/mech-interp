@@ -197,3 +197,57 @@ arguments instead of constructing them, so the whole loop is tested with stubs
 per problem", which would be ~4100 trajectories against a 500–800 target; in
 the spike `--n` meant "number of problems". `collect.py` ignores the field and
 uses `--samples-per-problem` (default 1). Needs a decision before the run.
+
+---
+
+## 2026-09-02 — Labeling built; F1/F2 heuristic needed a baseline
+
+Phase 1 is now code-complete: `label.py`, a real end-to-end pipeline test, and
+a Colab notebook. 69 tests, green on Windows and under WSL.
+
+**Schedule note.** The Aug 14 target passed with no dataset collected — the
+collection run was never started after the loop was built on Aug 11. Everything
+below is aimed at getting data to exist on the next GPU session.
+
+**Labeling design.** Three of five labels need no judgement and fall out of the
+collection stage: a passing attempt is P, a failed `correction` is F3, and a
+failed `review` is F4 (review only ever runs on code that already passed, so
+breaking it is spurious by construction). Only F1 vs. F2 is inferred.
+
+**Finding — partial credit alone cannot separate F1 from F2.** The first
+heuristic was "satisfies at least one test input => the approach works => F2".
+The pipeline test caught it immediately: on HumanEval/0, `return False` scores
+**F2**, because a constant answer is right on every test whose expected answer
+is also False. Measured directly, that is 0.80 of the combined base+plus inputs
+— a solution that ignores its input entirely, labeled an implementation
+failure.
+
+**Fix — partial credit is now measured against a constant baseline.**
+`collect.py` records `baseline_fraction`, the score the best constant-output
+solution would achieve on that problem, and F2 now requires beating it. On the
+same problem, a genuinely right-approach-but-buggy solution (pairwise distance,
+but comparing only adjacent elements) scores 0.841 against the 0.802 baseline
+and correctly labels F2, while `return False` labels F1.
+
+This is the sharpest methodological point in the project so far: the naive
+version would have silently filled the F2 class with degenerate constant-output
+solutions, and the probe would then have been asked to find a neural signature
+for a label that meant nothing.
+
+**Schema change:** records now carry `base_details`, `plus_details`, and
+`baseline_fraction`. The first two were being dropped by the collector even
+though the labeler needs them — caught while wiring the two together.
+
+**Pipeline test added** (`tests/test_pipeline.py`): scripted model, but real
+HumanEval+ problems, real EvalPlus grading, real feedback construction, real
+labeling. POSIX-only, so it runs in WSL and CI-skips on Windows. This is what
+should be trusted before spending GPU time, not the unit tests alone.
+
+**Colab notebook** (`analysis/notebooks/collect_on_colab.ipynb`): mounts Drive
+so output survives disconnects, smoke-tests 3 problems before the full run, and
+resumes on re-run. HumanEval+ alone caps at 164 trajectories; MBPP+ is included
+as step 8 to reach the 500–800 target.
+
+**Open — still unresolved from 2026-07-09:** correction feedback carries the
+first failing input and its expected output, not a traceback. Worth revisiting
+once the first real F3 counts are in.

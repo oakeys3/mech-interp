@@ -145,6 +145,52 @@ def review_messages(problem: dict[str, Any], previous_generation: str) -> Messag
 # Failure feedback
 # --------------------------------------------------------------------------- #
 
+def baseline_fraction(expected_output: dict[str, Any]) -> float | None:
+    """Score a trivial constant-output solution against this problem's tests.
+
+    Partial credit only means "the approach is roughly right" if it beats what
+    ignoring the input entirely would earn. On a boolean problem, ``return
+    False`` matches every test whose answer is False — around half of them —
+    which naive partial credit would misread as a working-but-buggy
+    implementation. This returns the fraction the best constant would score,
+    so the labeler can require partial credit to actually beat it.
+
+    Args:
+        expected_output: A problem's groundtruth entry, with base and plus
+            expected values.
+
+    Returns:
+        The best constant's success fraction, or None if there are no expected
+        values to compare against.
+    """
+    counts: dict[str, int] = {}
+    total = 0
+    for suite in ("base", "plus"):
+        for value in expected_output.get(suite, ()):
+            # repr keys because expected values include unhashable lists.
+            counts[repr(value)] = counts.get(repr(value), 0) + 1
+            total += 1
+    if not total:
+        return None
+    return max(counts.values()) / total
+
+
+def _as_list(details: tuple[int, ...] | None) -> list[int] | None:
+    """Convert grading detail flags to the type JSON will read back.
+
+    GradeResult keeps tuples so it stays hashable, but a record holding a
+    tuple would not equal the same record after a JSON round-trip. Storing a
+    list keeps the in-memory record and the on-disk line identical.
+
+    Args:
+        details: Per-input flags from a GradeResult, or None.
+
+    Returns:
+        The flags as a list, or None.
+    """
+    return None if details is None else list(details)
+
+
 def build_feedback(
     problem: dict[str, Any], expected_output: dict[str, Any], result: GradeResult
 ) -> str:
@@ -249,6 +295,9 @@ def run_trajectory(
                 "solution": solution,
                 "base_status": result.base_status,
                 "plus_status": result.plus_status,
+                "base_details": _as_list(result.base_details),
+                "plus_details": _as_list(result.plus_details),
+                "baseline_fraction": baseline_fraction(expected_output),
                 "passed": result.passed,
                 "feedback": feedback,
                 "final": False,
@@ -280,6 +329,9 @@ def run_trajectory(
                 "solution": solution,
                 "base_status": result.base_status,
                 "plus_status": result.plus_status,
+                "base_details": _as_list(result.base_details),
+                "plus_details": _as_list(result.plus_details),
+                "baseline_fraction": baseline_fraction(expected_output),
                 "passed": result.passed,
                 "feedback": (
                     "" if result.passed else build_feedback(problem, expected_output, result)

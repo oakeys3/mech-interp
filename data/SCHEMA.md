@@ -25,6 +25,8 @@ disconnect can at worst truncate the final line.
 | `solution` | str | Cleaned code that was actually graded |
 | `base_status` | str | EvalPlus status on the original tests |
 | `plus_status` | str | EvalPlus status on the augmented tests |
+| `base_details` | list\|null | Per-input 0/1 flags for the original tests |
+| `plus_details` | list\|null | Per-input 0/1 flags for the augmented tests |
 | `passed` | bool | True only if **both** suites pass |
 | `feedback` | str | Failure message shown to the model next round (`""` if passed) |
 | `final` | bool | True on the last attempt of a trajectory |
@@ -63,3 +65,8 @@ what happened; `label.py` decides what to call it.
 | Failed `initial` attempt | F1 or F2 (needs plan-vs-execution judgement) |
 | Failed `correction` attempt | F3 |
 | Failed `review` attempt after a pass | F4 |
+
+F1 vs. F2 is decided from `base_details`/`plus_details`: an attempt that
+satisfies at least one test input is read as F2 (approach right, execution
+broken), and one that satisfies none — timeouts included — as F1. Those two
+fields exist for exactly this reason and must not be dropped from the record.

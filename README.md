@@ -26,7 +26,7 @@ Every trajectory is labeled **per stage** — each (problem, stage, attempt) tup
 
 ## Status
 
-**Phase 1 — dataset collection (in progress).** Phase 0 closed 2026-07-08: Qwen2.5-1.5B-Instruct confirmed as primary model (28% first-attempt failure rate at n=25, genuine traceback engagement in 6/7 correction attempts, 0/7 correction successes — see the research log), EvalPlus confirmed as benchmark.
+**Phase 1 — dataset collection (code complete; collection run pending).** Harness, collection loop, and labeling are built and tested end-to-end against real EvalPlus grading; the GPU collection run is the next step ([notebook](analysis/notebooks/collect_on_colab.ipynb)). Phase 0 closed 2026-07-08: Qwen2.5-1.5B-Instruct confirmed as primary model (28% first-attempt failure rate at n=25, genuine traceback engagement in 6/7 correction attempts, 0/7 correction successes — see the research log), EvalPlus confirmed as benchmark.
 
 Findings from the feasibility spike ([spike/spike.py](spike/spike.py)):
 
