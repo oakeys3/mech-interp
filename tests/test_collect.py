@@ -14,6 +14,7 @@ import pytest
 
 from data.collection.collect import (
     append_records,
+    baseline_fraction,
     build_feedback,
     correction_messages,
     initial_messages,
@@ -215,6 +216,46 @@ def test_plus_only_failure_is_reported() -> None:
     result = GradeResult("pass", "fail", (1, 1), (0,))
     message = build_feedback(PROBLEM, EXPECTED, result)
     assert repr(PROBLEM["plus_input"][0]) in message
+
+
+# --------------------------------------------------------------------------- #
+# Huge values
+# --------------------------------------------------------------------------- #
+
+# Python 3.11+ refuses to stringify integers past 4300 digits, and EvalPlus's
+# augmented inputs really do reach that size (HumanEval/83, /139). This crashed
+# a live collection run at problem 84 of 164.
+HUGE = 10 ** 5000
+
+
+def test_baseline_survives_huge_integers() -> None:
+    """Grouping expected outputs must not stringify them."""
+    expected = {"base": [HUGE, HUGE, 1], "plus": []}
+    assert baseline_fraction(expected) == 2 / 3
+
+
+def test_baseline_survives_huge_integers_inside_lists() -> None:
+    """The same value nested in an unhashable container is just as fatal."""
+    expected = {"base": [[HUGE], [HUGE], [1]], "plus": []}
+    assert baseline_fraction(expected) == 2 / 3
+
+
+def test_baseline_distinguishes_bool_from_int() -> None:
+    """hash(True) == hash(1), so the key carries the type."""
+    assert baseline_fraction({"base": [True, 1], "plus": []}) == 0.5
+
+
+def test_baseline_handles_unhashable_values() -> None:
+    """Expected outputs are frequently lists."""
+    assert baseline_fraction({"base": [[1, 2], [1, 2], [3]], "plus": []}) == 2 / 3
+
+
+def test_feedback_survives_huge_integers() -> None:
+    """Building the correction message must not crash on giant expected values."""
+    problem = {**PROBLEM, "base_input": [[HUGE], [2]]}
+    expected = {"base": [HUGE, 2], "plus": [1]}
+    message = build_feedback(problem, expected, GradeResult("fail", "fail", (0, 1), (1,)))
+    assert "too large to display" in message
 
 
 # --------------------------------------------------------------------------- #

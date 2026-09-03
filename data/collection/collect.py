@@ -145,6 +145,54 @@ def review_messages(problem: dict[str, Any], previous_generation: str) -> Messag
 # Failure feedback
 # --------------------------------------------------------------------------- #
 
+def _safe_repr(value: Any) -> str:
+    """Render a value for display without tripping over gigantic integers.
+
+    Python 3.11+ refuses to convert integers longer than 4300 digits to
+    strings, and EvalPlus's augmented inputs genuinely produce such values
+    (HumanEval/83 and /139). A crash here would kill a running collection, so
+    an undisplayable value degrades to a description instead.
+
+    Args:
+        value: Any expected output or test input.
+
+    Returns:
+        ``repr(value)``, or a short description when repr is not possible.
+    """
+    try:
+        return repr(value)
+    except ValueError:
+        return f"<{type(value).__name__} too large to display>"
+
+
+def _value_key(value: Any) -> Any:
+    """Build a hashable key for grouping equal expected outputs.
+
+    Deliberately avoids string conversion: an earlier version keyed on
+    ``repr`` and crashed on HumanEval/83, whose expected outputs exceed
+    Python's 4300-digit integer-to-string limit. Containers are converted
+    structurally instead, and the type name is part of the key so that ``True``
+    and ``1`` are not counted as the same value.
+
+    Args:
+        value: An expected output value.
+
+    Returns:
+        A hashable key that compares equal for equal values.
+    """
+    if isinstance(value, (list, tuple)):
+        return ("seq", tuple(_value_key(item) for item in value))
+    if isinstance(value, (set, frozenset)):
+        return ("set", frozenset(_value_key(item) for item in value))
+    if isinstance(value, dict):
+        return ("map", frozenset((_value_key(k), _value_key(v)) for k, v in value.items()))
+    try:
+        hash(value)
+    except TypeError:
+        return ("repr", _safe_repr(value))
+    return (type(value).__name__, value)
+
+
 def baseline_fraction(expected_output: dict[str, Any]) -> float | None:
     """Score a trivial constant-output solution against this problem's tests.
 
@@ -163,12 +211,12 @@ def baseline_fraction(expected_output: dict[str, Any]) -> float | None:
         The best constant's success fraction, or None if there are no expected
         values to compare against.
     """
-    counts: dict[str, int] = {}
+    counts: dict[Any, int] = {}
     total = 0
     for suite in ("base", "plus"):
         for value in expected_output.get(suite, ()):
-            # repr keys because expected values include unhashable lists.
-            counts[repr(value)] = counts.get(repr(value), 0) + 1
+            key = _value_key(value)
+            counts[key] = counts.get(key, 0) + 1
             total += 1
     if not total:
         return None
@@ -224,9 +272,9 @@ def build_feedback(
                 continue
             if index >= len(inputs):
                 break
-            message = f"Wrong result for input {inputs[index]!r}."
+            message = f"Wrong result for input {_safe_repr(inputs[index])}."
             if index < len(expected):
-                message += f" Expected {expected[index]!r}."
+                message += f" Expected {_safe_repr(expected[index])}."
             return message[:MAX_FEEDBACK_CHARS]
         return "Your solution did not pass the tests."
     return ""

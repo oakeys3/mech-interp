@@ -251,3 +251,30 @@ as step 8 to reach the 500–800 target.
 **Open — still unresolved from 2026-07-09:** correction feedback carries the
 first failing input and its expected output, not a traceback. Worth revisiting
 once the first real F3 counts are in.
+
+---
+
+## 2026-09-03 — Collection crashed at problem 84: huge integers
+
+First real GPU collection run died 83/164 problems in. Checkpointing did its
+job: `already done: 83` on restart, nothing lost.
+
+**Cause (our bug, not EvalPlus's).** `baseline_fraction` grouped expected
+outputs by `repr(value)`. Python 3.11+ refuses to convert integers longer than
+4300 digits to strings, and EvalPlus's augmented `plus_input` genuinely reaches
+that scale on **HumanEval/83** (`starts_one_ends`) and **HumanEval/139**
+(`special_factorial`), where the answers grow exponentially in n. The run
+stopped at exactly HumanEval/83.
+
+**Fix.** Expected outputs are now grouped by a structural key that never
+stringifies: containers are converted recursively, scalars are keyed by
+`(type_name, value)` so `True` and `1` do not collide, and only genuinely
+unhashable leftovers fall back to a guarded repr. `build_feedback` had the same
+latent crash — it formatted inputs and expected values with `!r` — and now uses
+the same guarded repr, degrading to `<int too large to display>` rather than
+killing the run.
+
+**Lesson worth keeping:** the pipeline test used HumanEval/0 only, so it could
+not have caught this. The regression test now runs the two offending problems
+end-to-end through real grading. Sampling one easy problem is not coverage of a
+benchmark whose whole point is adversarial inputs.

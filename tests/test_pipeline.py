@@ -138,3 +138,27 @@ def test_records_survive_labeling_as_json(suite) -> None:
     round_tripped = [json.loads(json.dumps(record)) for record in records]
     assert round_tripped == records
     assert [r["label"] for r in label_records(round_tripped)] == ["P", "P"]
+
+
+# EvalPlus's augmented inputs push these two problems' expected outputs past
+# Python's 4300-digit integer-to-string limit. Keying or formatting them via
+# repr killed a live collection run at problem 84 of 164.
+@pytest.mark.parametrize("task_id", ["HumanEval/83", "HumanEval/139"])
+def test_problems_with_huge_expected_outputs(suite, task_id) -> None:
+    """Collection must survive problems whose answers are astronomically large."""
+    problems, expected = suite
+    problem = problems[task_id]
+
+    generator = ScriptedGenerator([problem["prompt"] + "    return 0\n"])
+    records = run_trajectory(
+        problem,
+        expected[task_id],
+        generator,
+        grade,
+        subset="humaneval",
+        correction_rounds=0,
+    )
+
+    assert records[0]["baseline_fraction"] is not None
+    assert isinstance(records[0]["feedback"], str)
+    assert label_records(records)[0]["label"] in {"F1", "F2"}
